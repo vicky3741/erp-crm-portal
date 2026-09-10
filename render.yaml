@@ -1,0 +1,53 @@
+# Render Blueprint for the ERP/CRM backend.
+#
+# Render can read this file directly (Dashboard -> New -> Blueprint), or the
+# same values can be entered by hand when creating a Web Service. Either way,
+# the settings below are the ones that matter.
+#
+# The database is Neon rather than a Render Postgres instance, so it is not
+# declared here — DATABASE_URL is supplied as a secret environment variable.
+
+services:
+  - type: web
+    name: erp-crm-api
+    runtime: node
+    plan: free
+    region: singapore
+    # Only the backend folder is built; the frontend is deployed separately.
+    rootDir: backend
+
+    buildCommand: npm ci && npx prisma generate && npm run build
+
+    # Migrations run on every boot before the server starts listening.
+    # `migrate deploy` only applies migrations that have not been applied yet,
+    # so restarting is safe and repeatable.
+    startCommand: npx prisma migrate deploy && node dist/server.js
+
+    # Render restarts the instance if this stops returning 2xx. The endpoint
+    # checks the database too, so a running process with a dead database is
+    # correctly treated as unhealthy.
+    healthCheckPath: /api/health
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Render injects its own PORT; the app reads it from the environment.
+      - key: PORT
+        value: 4000
+
+      # Set these in the Render dashboard, not here.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+
+      # Comma-separated list of allowed browser origins.
+      # Must include the deployed frontend URL, with no trailing slash.
+      - key: CORS_ORIGINS
+        sync: false
+
+      - key: BCRYPT_SALT_ROUNDS
+        value: 10
+      - key: JWT_EXPIRES_IN
+        value: 7d
