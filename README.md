@@ -12,9 +12,9 @@ Built as a Full Stack Developer case study.
 
 | | |
 |---|---|
-| **Frontend** | _add the Vercel URL_ |
-| **API** | _add the Render URL_ |
-| **Health check** | _add the Render URL_`/api/health` |
+| **Frontend** | https://erp-crm-portal-six.vercel.app |
+| **API** | https://erp-crm-api-4vpn.onrender.com |
+| **Health check** | https://erp-crm-api-4vpn.onrender.com/api/health |
 | **Repository** | https://github.com/vicky3741/erp-crm-portal |
 
 ### Test credentials
@@ -258,8 +258,10 @@ concurrency. Set `API_URL` to run the same suite against the deployed API:
 
 ```bash
 cd backend
-API_URL=https://your-api.onrender.com npm run test:smoke
+API_URL=https://erp-crm-api-4vpn.onrender.com npm run test:smoke
 ```
+
+All 135 pass against the deployed API, not only locally.
 
 ```bash
 npm run db:verify
