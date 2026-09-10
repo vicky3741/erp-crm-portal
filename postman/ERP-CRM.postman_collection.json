@@ -1,0 +1,1953 @@
+{
+  "info": {
+    "name": "ERP + CRM Operations Portal",
+    "_postman_id": "erp-crm-operations-portal",
+    "description": "REST API for a wholesale/distribution ERP and CRM.\n\n## Getting started\n\n1. Set the `baseUrl` variable (defaults to http://localhost:4000).\n2. Run **1. Authentication -> Login as Admin**. The token is captured automatically into `{{token}}`, so every other request works straight away.\n3. Run the other login requests too if you want to exercise role restrictions - they save `{{adminToken}}`, `{{salesToken}}`, `{{warehouseToken}}` and `{{accountsToken}}`.\n\n## Reading the folders\n\nRequests whose name ends in \"expect 4xx\" are meant to fail. They demonstrate validation, authorisation and the stock guard, and are as much a part of the API as the happy paths.\n\nFolder 5 is a numbered walkthrough: raise a draft, confirm it, watch stock drop, cancel it, watch stock return.\n\n## Response shape\n\nSuccess: `{ \"success\": true, \"data\": ..., \"meta\": ..., \"message\": ... }`\nFailure: `{ \"success\": false, \"message\": ..., \"details\": ... }`\n\n## Test credentials\n\n| Role | Email | Password |\n| --- | --- | --- |\n| Admin | admin@erp.local | Admin@123 |\n| Sales | sales@erp.local | Sales@123 |\n| Warehouse | warehouse@erp.local | Warehouse@123 |\n| Accounts | accounts@erp.local | Accounts@123 |",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "description": "Start here. Running \"Login as Admin\" stores the token in the {{token}} collection variable, which every other request uses automatically.",
+      "item": [
+        {
+          "name": "Login as Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"login succeeded\", () => pm.response.to.have.status(200));",
+                  "if (body.success && body.data && body.data.token) {",
+                  "  pm.collectionVariables.set(\"adminToken\", body.data.token);",
+                  "  pm.collectionVariables.set(\"token\", body.data.token);",
+                  "  console.log(\"Saved adminToken\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@erp.local\",\n  \"password\": \"Admin@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Exchanges credentials for a JWT and saves it to {{adminToken}} and {{token}}."
+          }
+        },
+        {
+          "name": "Login as Sales",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"login succeeded\", () => pm.response.to.have.status(200));",
+                  "if (body.success && body.data && body.data.token) {",
+                  "  pm.collectionVariables.set(\"salesToken\", body.data.token);",
+                  "  pm.collectionVariables.set(\"token\", body.data.token);",
+                  "  console.log(\"Saved salesToken\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sales@erp.local\",\n  \"password\": \"Sales@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Saves the token to {{salesToken}} and {{token}}."
+          }
+        },
+        {
+          "name": "Login as Warehouse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"login succeeded\", () => pm.response.to.have.status(200));",
+                  "if (body.success && body.data && body.data.token) {",
+                  "  pm.collectionVariables.set(\"warehouseToken\", body.data.token);",
+                  "  pm.collectionVariables.set(\"token\", body.data.token);",
+                  "  console.log(\"Saved warehouseToken\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"warehouse@erp.local\",\n  \"password\": \"Warehouse@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Saves the token to {{warehouseToken}} and {{token}}."
+          }
+        },
+        {
+          "name": "Login as Accounts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test(\"login succeeded\", () => pm.response.to.have.status(200));",
+                  "if (body.success && body.data && body.data.token) {",
+                  "  pm.collectionVariables.set(\"accountsToken\", body.data.token);",
+                  "  pm.collectionVariables.set(\"token\", body.data.token);",
+                  "  console.log(\"Saved accountsToken\");",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"accounts@erp.local\",\n  \"password\": \"Accounts@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Saves the token to {{accountsToken}} and {{token}}."
+          }
+        },
+        {
+          "name": "Current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Profile of whoever the current {{token}} belongs to."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "JWTs are stateless, so the client discards the token. Documented endpoint for the frontend."
+          }
+        },
+        {
+          "name": "Admin-only route (as Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/admin-check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "admin-check"
+              ]
+            },
+            "description": "Succeeds: the ADMIN role is allowed."
+          }
+        },
+        {
+          "name": "Admin-only route (as Sales) - expect 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/admin-check",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "admin-check"
+              ]
+            },
+            "description": "A VALID token for a REAL user, rejected by authorisation rather than authentication. The message names the role that would have been accepted.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        },
+        {
+          "name": "Wrong password - expect 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@erp.local\",\n  \"password\": \"WrongPassword\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Returns the same message as an unknown email, and takes the same time, so response behaviour cannot be used to discover which accounts exist.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Customers (CRM)",
+      "description": "Read is open to every role. Create and update need ADMIN or SALES; deactivate needs ADMIN.",
+      "item": [
+        {
+          "name": "List customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers?page=1&limit=10&sortBy=createdAt&sortOrder=desc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "desc"
+                }
+              ]
+            },
+            "description": "Paginated. Response carries a meta block with total, totalPages and next/prev flags."
+          }
+        },
+        {
+          "name": "Search customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers?search=joshi",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "joshi"
+                }
+              ]
+            },
+            "description": "Case-insensitive across name, mobile, email, business name and GST number."
+          }
+        },
+        {
+          "name": "Filter by status and type",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers?status=LEAD&customerType=WHOLESALE",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "LEAD"
+                },
+                {
+                  "key": "customerType",
+                  "value": "WHOLESALE"
+                }
+              ]
+            },
+            "description": "Filters combine."
+          }
+        },
+        {
+          "name": "Follow-ups due",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers?followUpDue=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "followUpDue",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Customers whose follow-up date has arrived or passed."
+          }
+        },
+        {
+          "name": "Customer summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "summary"
+              ]
+            },
+            "description": "Counts for the dashboard."
+          }
+        },
+        {
+          "name": "Create customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success) pm.collectionVariables.set(\"customerId\", body.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Customer\",\n  \"mobile\": \"9800000001\",\n  \"email\": \"postman@example.com\",\n  \"businessName\": \"Postman Traders\",\n  \"gstNumber\": \"27AABCP1234C1ZV\",\n  \"customerType\": \"WHOLESALE\",\n  \"address\": \"Plot 9, Test Estate, Pune 411001\",\n  \"status\": \"LEAD\",\n  \"notes\": \"Created from the Postman collection.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ]
+            },
+            "description": "Saves the new id to {{customerId}} for the requests below."
+          }
+        },
+        {
+          "name": "Get customer detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerId}}"
+              ]
+            },
+            "description": "Includes follow-up notes and the customer’s recent challans."
+          }
+        },
+        {
+          "name": "Update customer",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\",\n  \"notes\": \"Converted from lead.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerId}}"
+              ]
+            },
+            "description": "Partial update. Omitted fields are left alone, never reset to a default."
+          }
+        },
+        {
+          "name": "Add follow-up note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Called and shared the price list.\",\n  \"followUpDate\": \"2026-11-01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerId}}/followups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerId}}",
+                "followups"
+              ]
+            },
+            "description": "Optionally reschedules the customer’s next follow-up in the same call."
+          }
+        },
+        {
+          "name": "List follow-ups",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerId}}/followups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerId}}",
+                "followups"
+              ]
+            },
+            "description": "Paginated, newest first."
+          }
+        },
+        {
+          "name": "Create with invalid mobile - expect 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bad Data\",\n  \"mobile\": \"12345\",\n  \"email\": \"not-an-email\",\n  \"businessName\": \"X\",\n  \"customerType\": \"RETAIL\",\n  \"address\": \"Somewhere\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ]
+            },
+            "description": "Validation names the offending field.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        },
+        {
+          "name": "Create as Warehouse - expect 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{warehouseToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Should Not Be Created\",\n  \"mobile\": \"9800000009\",\n  \"email\": \"nope@example.com\",\n  \"businessName\": \"Nope\",\n  \"customerType\": \"RETAIL\",\n  \"address\": \"Nowhere\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers"
+              ]
+            },
+            "description": "The warehouse can read customers but not create them.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        },
+        {
+          "name": "Deactivate customer",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "{{customerId}}"
+              ]
+            },
+            "description": "Soft delete: the row survives because challans reference it."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Products & Inventory",
+      "description": "Read is open to every role. Create, update and stock movements need ADMIN or WAREHOUSE.",
+      "item": [
+        {
+          "name": "List products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Every row carries a computed isLowStock flag."
+          }
+        },
+        {
+          "name": "Search products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?search=oil",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "oil"
+                }
+              ]
+            },
+            "description": "Matches name, SKU, category and location."
+          }
+        },
+        {
+          "name": "Low stock only",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?lowStock=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "lowStock",
+                  "value": "true"
+                }
+              ]
+            },
+            "description": "Products at or below their alert level."
+          }
+        },
+        {
+          "name": "Low stock (dedicated endpoint)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/low-stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "low-stock"
+              ]
+            },
+            "description": "Same set, with a shortBy figure per product."
+          }
+        },
+        {
+          "name": "Categories",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "categories"
+              ]
+            },
+            "description": "Distinct categories, for filter dropdowns."
+          }
+        },
+        {
+          "name": "Product summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "summary"
+              ]
+            },
+            "description": "Counts for the dashboard."
+          }
+        },
+        {
+          "name": "Create product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success) pm.collectionVariables.set(\"productId\", body.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{warehouseToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Product\",\n  \"sku\": \"POSTMAN-001\",\n  \"category\": \"Test Category\",\n  \"unitPrice\": 250,\n  \"openingStock\": 300,\n  \"minStockAlert\": 50,\n  \"location\": \"Warehouse Z - Rack 1\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products"
+              ]
+            },
+            "description": "Opening stock is applied as an IN movement rather than written into the column, so the first balance a product has is explained by a ledger row. Saves {{productId}}."
+          }
+        },
+        {
+          "name": "Get product detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Includes the product’s most recent stock movements."
+          }
+        },
+        {
+          "name": "Stock IN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{warehouseToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 50,\n  \"movementType\": \"IN\",\n  \"reason\": \"Goods received from supplier\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}",
+                "stock"
+              ]
+            },
+            "description": "Goods received. Returns the new balance and the movement it wrote."
+          }
+        },
+        {
+          "name": "Stock OUT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{warehouseToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 30,\n  \"movementType\": \"OUT\",\n  \"reason\": \"Damaged in transit\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}",
+                "stock"
+              ]
+            },
+            "description": "Damage or a stock-count correction."
+          }
+        },
+        {
+          "name": "Stock OUT beyond available - expect 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{warehouseToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 999999,\n  \"movementType\": \"OUT\",\n  \"reason\": \"Attempt to overdraw\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}",
+                "stock"
+              ]
+            },
+            "description": "The guard lives in the SQL WHERE clause, so the database rejects it at write time. The response carries the requested amount, the available amount and the shortfall.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        },
+        {
+          "name": "Stock movement as Sales - expect 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 1,\n  \"movementType\": \"IN\",\n  \"reason\": \"Should not be allowed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}/stock",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}",
+                "stock"
+              ]
+            },
+            "description": "Sales can see stock but cannot move it.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{warehouseToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unitPrice\": 275,\n  \"minStockAlert\": 60\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "currentStock is deliberately absent from this schema - stock only moves via a movement."
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Stock Ledger",
+      "description": "Read-only over HTTP. Rows are only ever written by the transaction that changed the stock.",
+      "item": [
+        {
+          "name": "All movements",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stock-movements?page=1&limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stock-movements"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Every movement records the balance immediately after it."
+          }
+        },
+        {
+          "name": "Movements for one product",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stock-movements?productId={{productId}}&sortOrder=asc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stock-movements"
+              ],
+              "query": [
+                {
+                  "key": "productId",
+                  "value": "{{productId}}"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "asc"
+                }
+              ]
+            },
+            "description": "Oldest first, so the balances read as a running total."
+          }
+        },
+        {
+          "name": "OUT movements only",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stock-movements?movementType=OUT",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stock-movements"
+              ],
+              "query": [
+                {
+                  "key": "movementType",
+                  "value": "OUT"
+                }
+              ]
+            },
+            "description": "Filter by direction."
+          }
+        },
+        {
+          "name": "Movements caused by challans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stock-movements?referenceType=CHALLAN",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stock-movements"
+              ],
+              "query": [
+                {
+                  "key": "referenceType",
+                  "value": "CHALLAN"
+                }
+              ]
+            },
+            "description": "Each row points back at the challan that caused it."
+          }
+        },
+        {
+          "name": "Ledger summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stock-movements/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stock-movements",
+                "summary"
+              ]
+            },
+            "description": "Movement counts by direction."
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Sales Challans",
+      "description": "Run these in order. Raise a draft, watch stock stay untouched, confirm it, watch stock drop, then cancel it and watch stock come back.",
+      "item": [
+        {
+          "name": "List challans",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challans?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Filterable by status, customer and date range."
+          }
+        },
+        {
+          "name": "Challan summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challans/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans",
+                "summary"
+              ]
+            },
+            "description": "Counts by status plus the total confirmed value."
+          }
+        },
+        {
+          "name": "Step 1 - Raise a DRAFT challan",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.success) pm.collectionVariables.set(\"challanId\", body.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"quantity\": 60\n    }\n  ],\n  \"notes\": \"Raised from the Postman collection.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/challans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans"
+              ]
+            },
+            "description": "A draft reserves nothing: stock is untouched until it is confirmed. Note that each line stores the product name, SKU and price, not just the product id. Saves {{challanId}}."
+          }
+        },
+        {
+          "name": "Step 2 - Check stock is UNCHANGED",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Still at its previous balance. Drafts do not reserve stock."
+          }
+        },
+        {
+          "name": "Step 3 - Confirm the challan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{warehouseToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challans/{{challanId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans",
+                "{{challanId}}",
+                "confirm"
+              ]
+            },
+            "description": "One transaction: check every line, deduct each one, write the OUT movements, flip the status. All of it or none of it."
+          }
+        },
+        {
+          "name": "Step 4 - Check stock has DROPPED",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Reduced by exactly the dispatched quantity."
+          }
+        },
+        {
+          "name": "Step 5 - See the movements it caused",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challans/{{challanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans",
+                "{{challanId}}"
+              ]
+            },
+            "description": "The challan detail lists the stock movements it produced, with balances."
+          }
+        },
+        {
+          "name": "Confirm again - expect 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/challans/{{challanId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans",
+                "{{challanId}}",
+                "confirm"
+              ]
+            },
+            "description": "Already confirmed. Stock is not deducted a second time.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        },
+        {
+          "name": "Edit a confirmed challan - expect 409",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Trying to edit after dispatch\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/challans/{{challanId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans",
+                "{{challanId}}"
+              ]
+            },
+            "description": "Confirmed challans are immutable. Cancel and raise a new one instead.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        },
+        {
+          "name": "Raise a challan beyond available stock - expect 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{salesToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customerId}}\",\n  \"items\": [\n    {\n      \"productId\": \"{{productId}}\",\n      \"quantity\": 999999\n    }\n  ],\n  \"confirm\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/challans",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans"
+              ]
+            },
+            "description": "Create-and-confirm in one call. The response names every short item with its shortfall, and nothing is deducted - not even the lines that were available.\n\nThis request is EXPECTED TO FAIL - that is the point."
+          }
+        },
+        {
+          "name": "Step 6 - Cancel the challan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Customer cancelled the order\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/challans/{{challanId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "challans",
+                "{{challanId}}",
+                "cancel"
+              ]
+            },
+            "description": "Returns the stock as IN movements referencing the challan. Nothing is deleted to make the numbers work."
+          }
+        },
+        {
+          "name": "Step 7 - Check stock has COME BACK",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{productId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "products",
+                "{{productId}}"
+              ]
+            },
+            "description": "Back to the balance it had before confirmation."
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Health",
+      "description": "Used by the hosting platform and by the frontend.",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "Reports database reachability. Returns 503 if the database is down."
+          }
+        },
+        {
+          "name": "API index",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api"
+              ]
+            },
+            "description": "Lists every endpoint in the API."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "salesToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "warehouseToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accountsToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "challanId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

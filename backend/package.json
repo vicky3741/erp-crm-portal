@@ -19,7 +19,8 @@
     "seed": "tsx prisma/seed.ts",
     "db:verify": "tsx prisma/verify.ts",
     "test:smoke": "tsx scripts/smoke-test.ts",
-    "demo:auth": "tsx scripts/demo-auth.ts"
+    "demo:auth": "tsx scripts/demo-auth.ts",
+    "postman": "tsx scripts/generate-postman.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
