@@ -6,6 +6,7 @@ import { env } from './config/env';
 import { prisma } from './config/prisma';
 import apiRoutes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { globalRateLimiter } from './middleware/rateLimit';
 import { asyncHandler } from './utils/asyncHandler';
 
 export function createApp() {
@@ -29,6 +30,7 @@ export function createApp() {
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
   app.use(morgan(env.isProd ? 'combined' : 'dev'));
+  app.use('/api', globalRateLimiter);
 
   // Health probe — used by Render, by the frontend, and in the demo recording.
   // Reports the database separately so a reachable API with an unreachable
