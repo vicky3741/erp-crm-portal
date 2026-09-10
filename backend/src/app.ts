@@ -3,8 +3,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env';
+import { prisma } from './config/prisma';
 import apiRoutes from './routes';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { asyncHandler } from './utils/asyncHandler';
 
 export function createApp() {
   const app = express();
@@ -28,18 +30,31 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true }));
   app.use(morgan(env.isProd ? 'combined' : 'dev'));
 
-  // Liveness probe — used by Render and by the demo recording.
-  app.get('/api/health', (_req, res) => {
-    res.status(200).json({
-      success: true,
-      data: {
-        status: 'ok',
-        environment: env.NODE_ENV,
-        uptimeSeconds: Math.round(process.uptime()),
-        timestamp: new Date().toISOString(),
-      },
-    });
-  });
+  // Health probe — used by Render, by the frontend, and in the demo recording.
+  // Reports the database separately so a reachable API with an unreachable
+  // database is not mistaken for a healthy system.
+  app.get(
+    '/api/health',
+    asyncHandler(async (_req, res) => {
+      let database: 'up' | 'down' = 'up';
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+      } catch {
+        database = 'down';
+      }
+
+      res.status(database === 'up' ? 200 : 503).json({
+        success: database === 'up',
+        data: {
+          status: database === 'up' ? 'ok' : 'degraded',
+          database,
+          environment: env.NODE_ENV,
+          uptimeSeconds: Math.round(process.uptime()),
+          timestamp: new Date().toISOString(),
+        },
+      });
+    }),
+  );
 
   app.use('/api', apiRoutes);
 
