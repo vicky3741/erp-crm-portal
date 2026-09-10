@@ -1,8 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
-    "moduleResolution": "node",
+    // node16 rather than the legacy "node"/"node10" algorithm, which is
+    // deprecated in TypeScript 6 and, more importantly, ignores the "exports"
+    // map in a dependency's package.json. @prisma/client uses one, so under a
+    // newer compiler the old setting fails to resolve its generated types.
+    // package.json declares "type": "commonjs", so this still emits CommonJS.
+    "module": "node16",
+    "moduleResolution": "node16",
     "lib": ["ES2022"],
     "rootDir": "./src",
     "outDir": "./dist",
