@@ -70,13 +70,20 @@ Dashboard → **New** → **Web Service** → connect the GitHub repo, then:
 | Branch | `main` |
 | **Root Directory** | `backend` |
 | Runtime | Node |
-| Build Command | `npm ci && npx prisma generate && npm run build` |
+| Build Command | `npm ci --include=dev && npx prisma generate && npm run build` |
 | Start Command | `npx prisma migrate deploy && node dist/server.js` |
 | Health Check Path | `/api/health` |
 | Instance Type | Free |
 
 **Root Directory is the setting most often missed.** Without it Render builds
 from the repository root, finds no `src/server.ts`, and fails.
+
+**`--include=dev` is not optional.** `NODE_ENV` is `production` on Render, and
+npm omits devDependencies when that is set — which is exactly where `typescript`
+and every `@types/*` package lives. A plain `npm ci` produces a build that fails
+with dozens of `Cannot find name 'process'` and `Could not find a declaration
+file for module 'express'` errors, because `tsc` is running with no type
+definitions at all.
 
 ### Environment variables
 

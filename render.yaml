@@ -16,7 +16,11 @@ services:
     # Only the backend folder is built; the frontend is deployed separately.
     rootDir: backend
 
-    buildCommand: npm ci && npx prisma generate && npm run build
+    # --include=dev is required. NODE_ENV is production here, and npm omits
+    # devDependencies in that case — which is where typescript and every
+    # @types/* package lives. Without the flag, tsc runs with no type
+    # definitions and the build fails on "Cannot find name 'process'".
+    buildCommand: npm ci --include=dev && npx prisma generate && npm run build
 
     # Migrations run on every boot before the server starts listening.
     # `migrate deploy` only applies migrations that have not been applied yet,
