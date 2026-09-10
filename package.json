@@ -14,7 +14,8 @@
     "db:seed": "npm --prefix backend run seed",
     "db:verify": "npm --prefix backend run db:verify",
     "db:studio": "npm --prefix backend run prisma:studio",
-    "test:smoke": "npm --prefix backend run test:smoke"
+    "test:smoke": "npm --prefix backend run test:smoke",
+    "demo:auth": "npm --prefix backend run demo:auth"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

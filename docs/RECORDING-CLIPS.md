@@ -3,11 +3,10 @@
 One short clip per section, recorded while the work is fresh. Together these are the
 "while working on" evidence; the single long demo at the end is separate.
 
-**Tool:** `Win + Alt + R` (Xbox Game Bar). Mic on — check with `Win + Alt + M`.
+**Tool:** `Win + Alt + R` (Xbox Game Bar). Mic on — toggle with `Win + Alt + M`.
 Files land in `Videos\Captures\`.
 
-**Naming:** `S2-auth.mp4`, `S3-customers.mp4`, and so on. Keep them all in one folder;
-at the end you upload that folder, or stitch them together.
+**Naming:** `S2-auth.mp4`, `S3-customers.mp4`, and so on. Keep them in one folder.
 
 **Before every clip:**
 
@@ -16,123 +15,116 @@ at the end you upload that folder, or stitch them together.
 - [ ] `backend/.env` is CLOSED — it holds the live database password
 - [ ] Backend already running, so you are not recording a startup wait
 
+> **Windows note:** do not use `curl` in these clips. PowerShell aliases `curl` to a
+> different command with different syntax, and it will fail on camera. Every command
+> below is an `npm` script instead — they work identically in PowerShell, CMD and the
+> VS Code terminal.
+
 ---
 
 ## S2 — Authentication and role-based access
 
-**Length:** 4–5 minutes. **Record this in one take; do not edit.**
+**Length:** 4–5 minutes, one take.
 
-### Setup (before you press record)
+### Setup — do this BEFORE pressing record
 
-Two terminals open in `C:\dev\erp-crm-portal`:
+Open **two terminals**, both in `C:\dev\erp-crm-portal`.
+
+*In VS Code: `Ctrl + ~` opens a terminal, then click the split-terminal icon for the second.*
+
+**Terminal 1** — start the API and leave it alone:
 
 ```
-Terminal 1:  npm run dev:backend      <- leave it running
-Terminal 2:  empty, ready to type
+npm run dev:backend
 ```
 
-### Shot 1 — prove it runs (30s)
+Wait for `[server] ERP/CRM API listening on http://localhost:4000`.
 
-Show Terminal 1 with the server started. Say:
+**Terminal 2** — leave empty. This is the one you type in on camera.
 
-> "The API is running on port 4000, connected to a PostgreSQL database hosted on Neon
-> in Singapore."
+Now press `Win + Alt + R`.
 
-In Terminal 2:
+---
 
-```bash
-curl http://localhost:4000/api/health
+### Shot 1 — the tests (60s)
+
+In **Terminal 2**:
+
 ```
-
-Point at `"database":"up"`. Say:
-
-> "The health endpoint checks the database too. If Postgres were unreachable this would
-> return 503, not 200 — so a live API with a dead database can't be mistaken for healthy."
-
-### Shot 2 — the test suite (60s)
-
-```bash
 npm run test:smoke
 ```
 
-Let the table print. Scroll to the bottom. Say:
+Thirty rows print, all PASS. Say:
 
-> "Thirty checks against the running HTTP API — not unit tests against functions, actual
-> requests through the real middleware stack. All passing."
+> "Thirty checks against the running HTTP API — not unit tests against functions,
+> real requests through the actual middleware stack."
 
-Then scroll back up and point at **three specific rows**:
+Scroll up and point at three rows:
 
 1. `both failures return an identical message (no user enumeration)`
 2. `a token signed with another secret is rejected`
 3. `SALES is blocked from the admin-only route` → 403
 
+---
+
+### Shot 2 — the narrated walkthrough (90s)
+
+In **Terminal 2**:
+
+```
+npm run demo:auth
+```
+
+This prints five labelled steps. Scroll through them slowly and read along:
+
+| Step | What is on screen | What to say |
+|---|---|---|
+| 1 | Two failed logins, identical messages | "Wrong password and a non-existent email return the *same* message. If they differed, you could discover which company emails are real accounts." |
+| 2 | 400s with per-field messages | "Validation runs before any handler, and names the exact field." |
+| 3 | Three rejected tokens | "The third one is a forged JWT that literally claims `role: ADMIN` in its payload — but the signature doesn't verify against our secret, so it never gets in." |
+| 4 | Four successful logins | "One user per role. Note what's *not* in the response: no password, no hash." |
+| 5 | Same route, 200 then three 403s | "Every one of those carried a valid token for a real user. Authentication succeeded — authorisation is what stopped them." |
+
+---
+
 ### Shot 3 — walk the code (2 min)
 
-Open these three files in order and explain them.
+Open three files and explain the *why*, not the syntax.
 
-**`backend/src/middleware/auth.ts`** — the `authenticate` function.
+**`backend/src/middleware/auth.ts`** — the `authenticate` function:
 
-> "It verifies the token, then goes back to the database to load the user instead of
-> trusting what's inside the token. That's one extra lookup per request, and it means if
-> an admin deactivates someone, they lose access immediately — not whenever their token
-> happens to expire seven days later."
+> "It verifies the token, then goes back to the database to load the user rather than
+> trusting what's inside the token. That's one extra indexed lookup per request, and it
+> buys immediate effect — if an admin deactivates someone, they lose access on their very
+> next request, not seven days later when the token expires."
 
-Then `authorize(...roles)` just below it.
+Then `authorize(...roles)` just below:
 
-> "Authentication answers 'who are you'. Authorisation answers 'are you allowed'. They're
-> separate middleware so a route declares exactly what it needs:
+> "Authentication answers 'who are you'. Authorisation answers 'are you allowed'. Keeping
+> them separate means a route declares exactly what it needs:
 > `authenticate, authorize('ADMIN', 'SALES')`."
 
-**`backend/src/modules/auth/auth.service.ts`** — the login function.
+**`backend/src/modules/auth/auth.service.ts`** — the login function:
 
-> "If the email doesn't exist I still run a bcrypt comparison against a dummy hash. Without
-> that, a wrong email returns instantly and a wrong password takes ~100ms — and an attacker
-> can use that timing difference to work out which email addresses are real accounts.
-> Both paths now take the same time, and both return the same message."
+> "If the email doesn't exist, I still run a bcrypt comparison against a dummy hash.
+> Without it, a wrong email returns in a millisecond and a wrong password takes about a
+> hundred — and that timing gap alone tells an attacker which accounts are real."
 
-**`backend/src/middleware/validate.ts`**
+**`backend/src/middleware/validate.ts`**:
 
-> "Zod parses the request and *replaces* it. So unknown fields get stripped — a client can't
+> "Zod parses the request and *replaces* it, so unknown fields are stripped. A client can't
 > POST `role: ADMIN` alongside their login and have it reach the handler."
 
-### Shot 4 — break it live (60s)
+Stop recording: `Win + Alt + R`.
 
-This is the most convincing part. Do it for real, on camera.
+---
 
-```bash
-curl -X POST http://localhost:4000/api/auth/login -H "Content-Type: application/json" -d "{\"email\":\"admin@erp.local\",\"password\":\"WrongPassword\"}"
-```
+### Be ready to answer
 
-> "Wrong password — 401, generic message."
-
-```bash
-curl http://localhost:4000/api/auth/me
-```
-
-> "No token — 401."
-
-Now log in properly and copy the token:
-
-```bash
-curl -X POST http://localhost:4000/api/auth/login -H "Content-Type: application/json" -d "{\"email\":\"sales@erp.local\",\"password\":\"Sales@123\"}"
-```
-
-Copy the token from the response, then:
-
-```bash
-curl http://localhost:4000/api/auth/admin-check -H "Authorization: Bearer PASTE_TOKEN_HERE"
-```
-
-> "Valid token, real user — but the Sales role hitting an admin-only route gets a 403,
-> and the message tells them exactly which role would be accepted."
-
-Stop recording.
-
-### If asked, be ready to answer
-
-- **Why JWT and not sessions?** Stateless — no session store, and the API can scale
-  horizontally or be redeployed without logging everyone out.
+- **Why JWT and not sessions?** Stateless — no session store, and the API can be
+  redeployed or scaled horizontally without logging everyone out.
 - **What's the downside?** You can't revoke a single token before it expires. Mitigated
-  here by re-reading the user on every request, so deactivation is immediate.
-- **Where is the token stored on the frontend?** `localStorage`, attached by an axios
-  interceptor. Trade-off vs an httpOnly cookie is noted in `docs/ASSUMPTIONS.md`.
+  by re-reading the user on every request, so deactivation is immediate.
+- **Where does the frontend keep the token?** `localStorage`, attached by an axios
+  interceptor. The trade-off against an httpOnly cookie is recorded in
+  `docs/ASSUMPTIONS.md`.

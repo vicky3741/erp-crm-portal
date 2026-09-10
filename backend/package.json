@@ -18,7 +18,8 @@
     "prisma:studio": "prisma studio",
     "seed": "tsx prisma/seed.ts",
     "db:verify": "tsx prisma/verify.ts",
-    "test:smoke": "tsx scripts/smoke-test.ts"
+    "test:smoke": "tsx scripts/smoke-test.ts",
+    "demo:auth": "tsx scripts/demo-auth.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
