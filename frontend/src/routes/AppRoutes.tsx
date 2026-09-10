@@ -7,6 +7,11 @@ import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import CustomersPage from '@/pages/CustomersPage';
 import CustomerDetailPage from '@/pages/CustomerDetailPage';
+import ProductsPage from '@/pages/ProductsPage';
+import StockLedgerPage from '@/pages/StockLedgerPage';
+import ChallansPage from '@/pages/ChallansPage';
+import ChallanCreatePage from '@/pages/ChallanCreatePage';
+import ChallanDetailPage from '@/pages/ChallanDetailPage';
 
 /** Blocks a route until there is an authenticated user. */
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -42,6 +47,15 @@ export function AppRoutes() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/customers/:id" element={<CustomerDetailPage />} />
+
+        <Route path="/products" element={<ProductsPage />} />
+        <Route path="/stock" element={<StockLedgerPage />} />
+
+        <Route path="/challans" element={<ChallansPage />} />
+        {/* Declared before "/challans/:id" so "new" is not read as an id. */}
+        <Route path="/challans/new" element={<ChallanCreatePage />} />
+        <Route path="/challans/:id" element={<ChallanDetailPage />} />
+
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
