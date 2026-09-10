@@ -5,8 +5,21 @@ stock, and sales challans, with role-based access for Admin / Sales / Warehouse 
 
 Built as a Full Stack Developer case study.
 
-> **Status:** in development. Section S0 (scaffold) complete.
-> Full setup, deployment, credentials, and architecture notes land in S13.
+> **Status:** in development. Scaffold and database layer complete.
+> Full deployment notes and architecture write-up land in S13.
+
+---
+
+## Demo Login Credentials
+
+The seed script creates one user per role:
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@erp.local` | `Admin@123` |
+| Sales | `sales@erp.local` | `Sales@123` |
+| Warehouse | `warehouse@erp.local` | `Warehouse@123` |
+| Accounts | `accounts@erp.local` | `Accounts@123` |
 
 ---
 
@@ -65,11 +78,14 @@ npm run install:all
 cp backend/.env.example backend/.env      # then set DATABASE_URL and JWT_SECRET
 cp frontend/.env.example frontend/.env    # leave VITE_API_URL empty for local dev
 
-# 3. create the database schema and seed demo data  (available from S1)
+# 3. create the database schema and seed demo data
 npm run db:migrate
 npm run db:seed
 
-# 4. run backend (:4000) and frontend (:5173) together
+# 4. (optional) assert the seeded data satisfies every business invariant
+npm run db:verify
+
+# 5. run backend (:4000) and frontend (:5173) together
 npm run dev
 ```
 

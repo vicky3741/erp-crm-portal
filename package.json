@@ -12,6 +12,7 @@
     "typecheck": "npm --prefix backend run typecheck && npm --prefix frontend exec tsc -b --noEmit",
     "db:migrate": "npm --prefix backend run prisma:migrate",
     "db:seed": "npm --prefix backend run seed",
+    "db:verify": "npm --prefix backend run db:verify",
     "db:studio": "npm --prefix backend run prisma:studio"
   },
   "devDependencies": {
