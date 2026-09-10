@@ -482,6 +482,314 @@ async function main() {
   await call(`/api/customers/${customerId}/reactivate`, { method: 'POST', token: tokens.ADMIN });
   await call(`/api/customers/${customerId}`, { method: 'DELETE', token: tokens.ADMIN });
 
+  // ------------------------------- products --------------------------------
+  group('products: read');
+  const productList = await call('/api/products?limit=100', { token: tokens.SALES });
+  expectStatus('list products', productList.status, 200);
+  check(
+    'seeded products are returned',
+    '12 active products',
+    `${productList.body?.meta?.total}`,
+    productList.body?.meta?.total === 12,
+  );
+  check(
+    'each row carries a computed isLowStock flag',
+    'boolean on every row',
+    typeof productList.body?.data?.[0]?.isLowStock,
+    (productList.body?.data ?? []).every((p: any) => typeof p.isLowStock === 'boolean'),
+  );
+
+  const lowStockRes = await call('/api/products/low-stock', { token: tokens.WAREHOUSE });
+  check(
+    'low-stock endpoint returns the three seeded products',
+    '3 products, all at or below their alert level',
+    `${lowStockRes.body?.data?.length}`,
+    lowStockRes.body?.data?.length === 3 &&
+      lowStockRes.body.data.every((p: any) => p.currentStock <= p.minStockAlert),
+  );
+
+  const lowStockFilter = await call('/api/products?lowStock=true', { token: tokens.ADMIN });
+  check(
+    'the lowStock filter agrees with the dedicated endpoint',
+    '3',
+    `${lowStockFilter.body?.meta?.total}`,
+    lowStockFilter.body?.meta?.total === 3,
+  );
+
+  const categoriesRes = await call('/api/products/categories', { token: tokens.SALES });
+  check(
+    'categories are returned distinct and sorted',
+    'Grocery, Home Care, Personal Care, Snacks',
+    JSON.stringify(categoriesRes.body?.data),
+    JSON.stringify(categoriesRes.body?.data) ===
+      JSON.stringify(['Grocery', 'Home Care', 'Personal Care', 'Snacks']),
+  );
+
+  const bySku = await call('/api/products?search=GRO-OIL', { token: tokens.ADMIN });
+  check(
+    'search matches on SKU',
+    'Sunflower Oil 1L Pouch',
+    `${bySku.body?.data?.[0]?.name}`,
+    bySku.body?.data?.[0]?.sku === 'GRO-OIL-1L',
+  );
+
+  const oilProduct = bySku.body?.data?.[0];
+  const oilId: string = oilProduct?.id;
+
+  // --------------------------- products: write -----------------------------
+  group('products: write');
+  const newProduct = {
+    name: 'Smoke Test Widget',
+    sku: 'smoke-test-001',
+    category: 'Test Category',
+    unitPrice: 199.5,
+    openingStock: 100,
+    minStockAlert: 20,
+    location: 'Warehouse Z - Rack 9',
+  };
+
+  const productBySales = await call('/api/products', { method: 'POST', token: tokens.SALES, body: newProduct });
+  expectStatus('SALES cannot create a product', productBySales.status, 403);
+
+  const badPrice = await call('/api/products', {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { ...newProduct, unitPrice: 12.999 },
+  });
+  expectStatus('a price with 3 decimal places is rejected', badPrice.status, 400);
+
+  const negativePrice = await call('/api/products', {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { ...newProduct, unitPrice: -5 },
+  });
+  expectStatus('a negative price is rejected', negativePrice.status, 400);
+
+  const productRes = await call('/api/products', {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: newProduct,
+  });
+  expectStatus('WAREHOUSE can create a product', productRes.status, 201);
+  const productId: string = productRes.body?.data?.id;
+  check(
+    'SKU is upper-cased on create',
+    'SMOKE-TEST-001',
+    String(productRes.body?.data?.sku),
+    productRes.body?.data?.sku === 'SMOKE-TEST-001',
+  );
+  check(
+    'opening stock was applied',
+    '100 in stock',
+    `${productRes.body?.data?.currentStock}`,
+    productRes.body?.data?.currentStock === 100,
+  );
+
+  const openingMovement = await call(`/api/stock-movements?productId=${productId}`, { token: tokens.ADMIN });
+  check(
+    'opening stock was recorded as an auditable IN movement',
+    '1 IN movement, balanceAfter 100, reason "Opening stock"',
+    `${openingMovement.body?.data?.length} movement, type ${openingMovement.body?.data?.[0]?.movementType}, balanceAfter ${openingMovement.body?.data?.[0]?.balanceAfter}`,
+    openingMovement.body?.data?.length === 1 &&
+      openingMovement.body.data[0].movementType === 'IN' &&
+      openingMovement.body.data[0].balanceAfter === 100 &&
+      openingMovement.body.data[0].reason === 'Opening stock',
+  );
+
+  const duplicateSku = await call('/api/products', {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { ...newProduct, name: 'Different Name' },
+  });
+  expectStatus('a duplicate SKU is rejected', duplicateSku.status, 409);
+
+  const stockViaPatch = await call(`/api/products/${productId}`, {
+    method: 'PATCH',
+    token: tokens.WAREHOUSE,
+    body: { currentStock: 99999 },
+  });
+  check(
+    'currentStock cannot be set directly through PATCH',
+    'stock unchanged at 100',
+    `${stockViaPatch.status} -> stock ${stockViaPatch.body?.data?.currentStock}`,
+    stockViaPatch.status === 400 || stockViaPatch.body?.data?.currentStock === 100,
+  );
+
+  // ---------------------------- stock movements ----------------------------
+  group('stock: movements');
+  const stockIn = await call(`/api/products/${productId}/stock`, {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { quantity: 50, movementType: 'IN', reason: 'Goods received from supplier' },
+  });
+  expectStatus('WAREHOUSE can record an IN movement', stockIn.status, 201);
+  check(
+    'the IN movement raised the balance and recorded it',
+    'stock 150, balanceAfter 150',
+    `stock ${stockIn.body?.data?.product?.currentStock}, balanceAfter ${stockIn.body?.data?.movement?.balanceAfter}`,
+    stockIn.body?.data?.product?.currentStock === 150 && stockIn.body?.data?.movement?.balanceAfter === 150,
+  );
+
+  const stockOut = await call(`/api/products/${productId}/stock`, {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { quantity: 30, movementType: 'OUT', reason: 'Damaged in transit' },
+  });
+  check(
+    'the OUT movement lowered the balance',
+    'stock 120',
+    `${stockOut.body?.data?.product?.currentStock}`,
+    stockOut.body?.data?.product?.currentStock === 120,
+  );
+
+  const stockBySales = await call(`/api/products/${productId}/stock`, {
+    method: 'POST',
+    token: tokens.SALES,
+    body: { quantity: 1, movementType: 'IN', reason: 'Should not be allowed' },
+  });
+  expectStatus('SALES cannot move stock', stockBySales.status, 403);
+
+  const noReason = await call(`/api/products/${productId}/stock`, {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { quantity: 5, movementType: 'IN' },
+  });
+  expectStatus('a stock movement without a reason is rejected', noReason.status, 400);
+
+  const fractional = await call(`/api/products/${productId}/stock`, {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { quantity: 2.5, movementType: 'IN', reason: 'Fractional units' },
+  });
+  expectStatus('a fractional quantity is rejected', fractional.status, 400);
+
+  const zeroQty = await call(`/api/products/${productId}/stock`, {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { quantity: 0, movementType: 'OUT', reason: 'Zero movement' },
+  });
+  expectStatus('a zero quantity is rejected', zeroQty.status, 400);
+
+  // ------------------------ the core stock guarantee -----------------------
+  group('stock: cannot go negative');
+  const overdraw = await call(`/api/products/${productId}/stock`, {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { quantity: 5000, movementType: 'OUT', reason: 'Attempt to overdraw' },
+  });
+  expectStatus('taking out more than exists is rejected', overdraw.status, 400);
+  check(
+    'the rejection names the shortfall',
+    'message states requested and available',
+    String(overdraw.body?.message),
+    String(overdraw.body?.message ?? '').includes('5000') &&
+      String(overdraw.body?.message ?? '').includes('120'),
+  );
+  check(
+    'the rejection carries machine-readable detail',
+    'insufficientStock array with shortBy',
+    JSON.stringify(overdraw.body?.details ?? null),
+    overdraw.body?.details?.insufficientStock?.[0]?.shortBy === 4880,
+  );
+
+  const afterOverdraw = await call(`/api/products/${productId}`, { token: tokens.ADMIN });
+  check(
+    'the failed movement changed nothing',
+    'stock still 120',
+    `${afterOverdraw.body?.data?.currentStock}`,
+    afterOverdraw.body?.data?.currentStock === 120,
+  );
+
+  // Ten simultaneous requests for 20 units each against a balance of 120.
+  // At most six can succeed; the guard must reject the rest.
+  const concurrent = await Promise.all(
+    Array.from({ length: 10 }, (_, i) =>
+      call(`/api/products/${productId}/stock`, {
+        method: 'POST',
+        token: tokens.WAREHOUSE,
+        body: { quantity: 20, movementType: 'OUT', reason: `Concurrent request ${i + 1}` },
+      }),
+    ),
+  );
+
+  const succeeded = concurrent.filter((r) => r.status === 201).length;
+  const rejected = concurrent.filter((r) => r.status === 400).length;
+  check(
+    'ten concurrent withdrawals of 20 from a balance of 120',
+    'exactly 6 succeed, 4 rejected',
+    `${succeeded} succeeded, ${rejected} rejected`,
+    succeeded === 6 && rejected === 4,
+  );
+
+  const afterConcurrency = await call(`/api/products/${productId}`, { token: tokens.ADMIN });
+  check(
+    'stock landed exactly on zero, never below',
+    '0',
+    `${afterConcurrency.body?.data?.currentStock}`,
+    afterConcurrency.body?.data?.currentStock === 0,
+  );
+
+  const ledger = await call(`/api/stock-movements?productId=${productId}&limit=100&sortOrder=asc`, {
+    token: tokens.ACCOUNTS,
+  });
+  const movements: any[] = ledger.body?.data ?? [];
+  let running = 0;
+  const ledgerConsistent = movements.every((m) => {
+    running += m.movementType === 'IN' ? m.quantityChanged : -m.quantityChanged;
+    return m.balanceAfter === running;
+  });
+  check(
+    'the ledger replays to the current balance with no gaps',
+    'every balanceAfter matches the running total',
+    `${movements.length} movements, final balance ${running}`,
+    ledgerConsistent && running === 0,
+  );
+
+  // ---------------------------- ledger filters -----------------------------
+  group('stock: ledger');
+  const outOnly = await call(`/api/stock-movements?productId=${productId}&movementType=OUT&limit=100`, {
+    token: tokens.ADMIN,
+  });
+  check(
+    'the ledger filters by movement type',
+    'only OUT rows',
+    `${outOnly.body?.data?.length} rows`,
+    (outOnly.body?.data ?? []).every((m: any) => m.movementType === 'OUT'),
+  );
+
+  const ledgerNoToken = await call('/api/stock-movements');
+  expectStatus('the ledger requires authentication', ledgerNoToken.status, 401);
+
+  // Clean up: deactivate the test product (its ledger rows must survive).
+  const productDeleted = await call(`/api/products/${productId}`, { method: 'DELETE', token: tokens.ADMIN });
+  expectStatus('ADMIN can deactivate a product', productDeleted.status, 200);
+
+  const ledgerAfterDelete = await call(`/api/stock-movements?productId=${productId}&limit=100`, {
+    token: tokens.ADMIN,
+  });
+  check(
+    'deactivating a product preserves its stock history',
+    `${movements.length} movements still present`,
+    `${ledgerAfterDelete.body?.data?.length}`,
+    ledgerAfterDelete.body?.data?.length === movements.length,
+  );
+
+  const moveDeactivated = await call(`/api/products/${productId}/stock`, {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { quantity: 1, movementType: 'IN', reason: 'Into a deactivated product' },
+  });
+  expectStatus('a deactivated product cannot move stock', moveDeactivated.status, 409);
+
+  // Confirm the seeded catalogue is untouched by all of the above.
+  const oilAfter = await call(`/api/products/${oilId}`, { token: tokens.ADMIN });
+  check(
+    'the seeded catalogue was not disturbed',
+    'Sunflower Oil still at 360',
+    `${oilAfter.body?.data?.currentStock}`,
+    oilAfter.body?.data?.currentStock === 360,
+  );
+
   // -------------------------------- report ---------------------------------
   const passed = results.filter((r) => r.pass).length;
   const failed = results.filter((r) => !r.pass);

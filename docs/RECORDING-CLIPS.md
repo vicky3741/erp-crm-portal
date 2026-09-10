@@ -196,3 +196,84 @@ Stop recording: `Win + Alt + R`. Save as `S3-customers.mp4`.
   correctly, because the challan also stores a snapshot of the customer's details.
 - **Why cap `limit` at 100?** Without a cap, a single request for `limit=1000000` is a
   denial-of-service against your own database.
+
+---
+
+## S4 — Products and inventory
+
+**Length:** 4–5 minutes. This is the strongest clip so far — the concurrency result is
+something most submissions cannot show.
+
+### Shot 1 — the tests (90s)
+
+```
+npm run test:smoke
+```
+
+> "One hundred and one checks now."
+
+Scroll to the `stock: cannot go negative` group and stop there. Point at these two rows
+and give them time on screen:
+
+| Row | What to say |
+|---|---|
+| `ten concurrent withdrawals of 20 from a balance of 120` → **6 succeeded, 4 rejected** | "This fires ten simultaneous requests, each taking twenty units, against a balance of one hundred and twenty. Exactly six can succeed. Six did. Four were rejected." |
+| `stock landed exactly on zero, never below` | "And the balance landed on zero. Not minus eighty." |
+
+Then point at `the ledger replays to the current balance with no gaps`:
+
+> "The ledger is then replayed from the first movement to the last, and every recorded
+> balance matches the running total. The log and the stock level cannot disagree."
+
+### Shot 2 — why it works (2 min)
+
+Open **`backend/src/modules/stock/stock.service.ts`** and find `applyStockMovement`.
+
+Point at the `updateMany` call with its `where` clause:
+
+> "This is the whole trick. The stock check is *inside* the WHERE clause —
+> `WHERE id = ? AND currentStock >= n`. The database decides whether there's enough,
+> at the moment it writes."
+
+> "The obvious version reads the stock, checks it in JavaScript, then writes. That's a
+> race. Two requests both read 'fifty available', both pass the check, both dispatch
+> forty, and you've shipped eighty units you don't have. Here the second UPDATE simply
+> matches zero rows, and I turn that into the 400."
+
+Then point at the read-back and the movement creation just below:
+
+> "Then it reads the balance back *inside the same transaction* and writes the movement
+> row with that number. Both writes commit together or neither does."
+
+Scroll up to the doc comment:
+
+> "And every caller goes through this one function — the manual adjustment endpoint,
+> and shortly the challan confirmation. There is no code path anywhere that changes
+> stock without writing a movement, or writes a movement without changing stock."
+
+### Shot 3 — see it live (60s)
+
+Open **`backend/src/modules/products/product.service.ts`** → `createProduct`:
+
+> "Even opening stock isn't written straight into the column. The product is created at
+> zero, then the opening quantity is applied as an IN movement — so a product's very
+> first stock level still has a row explaining where it came from."
+
+Then `updateProductSchema` in `product.schema.ts`:
+
+> "And `currentStock` isn't in the update schema at all. You cannot PATCH a stock level.
+> The only way it ever changes is through a movement."
+
+Stop recording. Save as `S4-inventory.mp4`.
+
+### Be ready to answer
+
+- **Why not `SELECT ... FOR UPDATE`?** A conditional UPDATE achieves the same guarantee
+  in one statement, with no explicit lock to hold or release, and it works identically
+  through a connection pooler.
+- **What if two requests arrive at exactly the same microsecond?** One of them updates
+  the row; the other's WHERE clause no longer matches and it updates zero rows. Postgres
+  serialises row-level writes for us.
+- **Why store `balanceAfter` when it could be recomputed?** Recomputing means summing the
+  entire history on every read. Storing it makes the ledger directly auditable — and the
+  smoke test replays it to prove the two never drift.
