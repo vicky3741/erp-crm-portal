@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import authRoutes from '../modules/auth/auth.routes';
+import customerRoutes from '../modules/customers/customer.routes';
 
 /**
  * Central API router. Feature routers are mounted here as each module is built:
@@ -25,11 +26,23 @@ router.get('/', (_req, res) => {
           'POST /api/auth/logout': 'Client-side token disposal',
           'GET /api/auth/admin-check': 'ADMIN-only route demonstrating RBAC',
         },
+        customers: {
+          'GET /api/customers': 'Paginated list with search, filters and sorting',
+          'GET /api/customers/summary': 'Counts for the dashboard',
+          'POST /api/customers': 'Create a customer (ADMIN, SALES)',
+          'GET /api/customers/:id': 'Customer detail with follow-ups and recent challans',
+          'PATCH /api/customers/:id': 'Update a customer (ADMIN, SALES)',
+          'DELETE /api/customers/:id': 'Deactivate a customer (ADMIN)',
+          'POST /api/customers/:id/reactivate': 'Reactivate a customer (ADMIN)',
+          'GET /api/customers/:id/followups': 'Paginated follow-up notes',
+          'POST /api/customers/:id/followups': 'Add a follow-up note (ADMIN, SALES)',
+        },
       },
     },
   });
 });
 
 router.use('/auth', authRoutes);
+router.use('/customers', customerRoutes);
 
 export default router;

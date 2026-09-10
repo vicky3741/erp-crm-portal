@@ -80,8 +80,11 @@ model User {
 
 model Customer {
   id           String         @id @default(cuid())
-  name         String
-  mobile       String
+  name String
+  // Mobile is how this business identifies a customer, so it is unique at the
+  // database level rather than only checked in application code — two
+  // concurrent creates cannot both slip through.
+  mobile       String @unique
   email        String
   businessName String
   gstNumber    String? // optional per the spec
@@ -101,7 +104,6 @@ model Customer {
   challans  Challan[]
 
   @@index([name])
-  @@index([mobile])
   @@index([status])
   @@index([customerType])
   @@index([followUpDate])
