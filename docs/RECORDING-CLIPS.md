@@ -277,3 +277,78 @@ Stop recording. Save as `S4-inventory.mp4`.
 - **Why store `balanceAfter` when it could be recomputed?** Recomputing means summing the
   entire history on every read. Storing it makes the ledger directly auditable — and the
   smoke test replays it to prove the two never drift.
+
+---
+
+## S5 — Sales challans
+
+**Length:** 5–6 minutes. This is the section the brief spends the most words on, so give
+it the most time.
+
+### Shot 1 — the tests (90s)
+
+```
+npm run test:smoke
+```
+
+> "One hundred and thirty-five checks."
+
+Scroll to the `challans:` groups and point at five rows:
+
+| Row | What to say |
+|---|---|
+| `raising a draft does NOT touch stock` | "A draft reserves nothing. Stock is untouched until someone confirms." |
+| `confirming deducted exactly the dispatched quantity` | "Three hundred minus sixty is two hundred and forty. Exactly what left the warehouse." |
+| `the AVAILABLE item on that challan was not deducted either` | "This is the important one. That challan had two lines — one with plenty of stock, one short. The whole confirm rolled back. You never end up half-dispatched." |
+| `five simultaneous confirms for 2 units each, only 5 in stock` → **2 confirmed, 3 rejected** | "Five challans confirmed at the same instant, two units each, five units in stock. Two shipped. Three were rejected." |
+| `renaming and repricing a product does NOT rewrite past challans` | "I renamed the product and changed its price after dispatch. The challan still shows the original name and the price actually charged." |
+
+### Shot 2 — the confirm transaction (2 min)
+
+Open **`backend/src/modules/challans/challan.service.ts`** → `confirmWithinTransaction`.
+
+> "Confirming a challan is one transaction. First it collects *every* shortfall, not just
+> the first one — a warehouse user with a ten-line challan shouldn't have to retry ten
+> times to find every problem."
+
+> "Then it deducts each line through `applyStockMovement` — the same function the manual
+> adjustment endpoint uses. And only then does the challan flip to CONFIRMED. All of it
+> commits together, or none of it does."
+
+Scroll up to `nextChallanNumber`:
+
+> "Challan numbers come from a counter table, incremented inside the same transaction.
+> The obvious approach is `count() + 1` — but two simultaneous requests both count the
+> same total and both build CH-202609-0007. The smoke test asserts every number issued
+> is distinct."
+
+Scroll to `resolveLines`:
+
+> "And this is the snapshot. Every line copies the product's name, SKU, category and
+> price as they are right now. A challan is a dispatch document — what left the
+> warehouse, at what price, on what day. If it only held a product ID, repricing that
+> product next month would silently rewrite every historical challan and every invoice
+> built from them."
+
+### Shot 3 — cancellation and the ledger (60s)
+
+Scroll to `cancelChallan`:
+
+> "Cancelling a confirmed challan returns the stock as IN movements that point back at
+> the challan. Nothing is deleted to make the numbers work — the goods came back, so the
+> ledger says so. You can read the whole life of that challan out of the movement log."
+
+Stop recording. Save as `S5-challans.mp4`.
+
+### Be ready to answer
+
+- **Why re-price at confirmation rather than at draft time?** A draft may sit for days.
+  The dispatch document should record what was actually charged on the day the goods
+  left the building.
+- **What if the same product appears twice on one challan?** The lines are merged into
+  one before they reach the service, with the quantities added together.
+- **Why can WAREHOUSE confirm but not raise a challan?** Sales owns the customer
+  relationship; the warehouse physically dispatches the goods, so it has to be able to
+  commit the stock movement.
+- **Why is cancel ADMIN-only?** Cancelling reverses stock. That is a correction to a
+  completed transaction, so it needs the higher privilege.

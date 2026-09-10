@@ -32,6 +32,14 @@ function mapPrismaError(err: { code: string; meta?: Record<string, unknown> }): 
       return AppError.badRequest('Related record does not exist');
     case 'P2025':
       return AppError.notFound('Record not found');
+    case 'P2024':
+      // Connection pool exhausted — the database is up but saturated. This is
+      // a capacity problem, not a bug in the request, so it gets a 503 and a
+      // message a client can act on rather than a generic 500.
+      return new AppError(503, 'The server is busy. Please retry in a moment.');
+    case 'P2034':
+      // Write conflict or deadlock in a transaction; retrying usually succeeds.
+      return AppError.conflict('That record was being changed by someone else. Please try again.');
     default:
       return AppError.internal('Database error');
   }

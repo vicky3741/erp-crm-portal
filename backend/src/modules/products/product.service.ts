@@ -3,7 +3,7 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../utils/AppError';
 import { buildPaginationMeta } from '../../utils/response';
 import { normaliseSearch, toSkipTake } from '../../utils/query';
-import { applyStockMovement } from '../stock/stock.service';
+import { applyStockMovement, STOCK_TX_OPTIONS } from '../stock/stock.service';
 import type { AdjustStockInput } from '../stock/stock.schema';
 import type { CreateProductInput, ListProductsQuery, UpdateProductInput } from './product.schema';
 
@@ -134,7 +134,7 @@ export async function createProduct(input: CreateProductInput, createdById: stri
 
     const fresh = await tx.product.findUniqueOrThrow({ where: { id: product.id }, select: listSelect });
     return { ...fresh, isLowStock: fresh.currentStock <= fresh.minStockAlert };
-  });
+  }, STOCK_TX_OPTIONS);
 }
 
 export async function updateProduct(id: string, input: UpdateProductInput) {
@@ -174,14 +174,16 @@ export async function reactivateProduct(id: string) {
 
 /** Manual stock correction — goods received, damage, stock count adjustment. */
 export async function adjustStock(productId: string, input: AdjustStockInput, createdById: string) {
-  return prisma.$transaction(async (tx) =>
-    applyStockMovement(tx, {
-      productId,
-      quantity: input.quantity,
-      movementType: input.movementType,
-      reason: input.reason,
-      createdById,
-    }),
+  return prisma.$transaction(
+    async (tx) =>
+      applyStockMovement(tx, {
+        productId,
+        quantity: input.quantity,
+        movementType: input.movementType,
+        reason: input.reason,
+        createdById,
+      }),
+    STOCK_TX_OPTIONS,
   );
 }
 

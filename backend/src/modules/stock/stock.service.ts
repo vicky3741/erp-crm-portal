@@ -43,6 +43,14 @@ export interface InsufficientStockDetail {
  * and both dispatch 40. Here the database itself rejects the second one, so
  * stock cannot go negative no matter how the requests interleave.
  */
+interface UpdatedProductRow {
+  id: string;
+  name: string;
+  sku: string;
+  currentStock: number;
+  minStockAlert: number;
+}
+
 export async function applyStockMovement(tx: Prisma.TransactionClient, request: StockMovementRequest) {
   const { productId, quantity, movementType, reason, createdById, referenceType, referenceId } = request;
 
@@ -50,52 +58,60 @@ export async function applyStockMovement(tx: Prisma.TransactionClient, request: 
     throw AppError.badRequest('Stock movement quantity must be a whole number greater than zero');
   }
 
-  const product = await tx.product.findUnique({
-    where: { id: productId },
-    select: { id: true, name: true, sku: true, currentStock: true, isActive: true },
-  });
+  // Guard, update and read-back in ONE statement.
+  //
+  // Doing this as findUnique + updateMany + findUnique meant four round trips to
+  // the database while holding a row lock. Under concurrency later transactions
+  // queued behind that lock long enough to hit the transaction timeout, so
+  // requests that should have been cleanly accepted or cleanly rejected errored
+  // instead. RETURNING collapses it to one.
+  const rows =
+    movementType === MovementType.OUT
+      ? await tx.$queryRaw<UpdatedProductRow[]>`
+          UPDATE "products"
+             SET "currentStock" = "currentStock" - ${quantity},
+                 "updatedAt" = NOW()
+           WHERE "id" = ${productId}
+             AND "isActive" = true
+             AND "currentStock" >= ${quantity}
+       RETURNING "id", "name", "sku", "currentStock", "minStockAlert"`
+      : await tx.$queryRaw<UpdatedProductRow[]>`
+          UPDATE "products"
+             SET "currentStock" = "currentStock" + ${quantity},
+                 "updatedAt" = NOW()
+           WHERE "id" = ${productId}
+             AND "isActive" = true
+       RETURNING "id", "name", "sku", "currentStock", "minStockAlert"`;
 
-  if (!product) throw AppError.notFound('Product not found');
-  if (!product.isActive) {
-    throw AppError.conflict(`${product.name} (${product.sku}) is deactivated and cannot move stock`);
-  }
+  const updated = rows[0];
 
-  if (movementType === MovementType.OUT) {
-    const guarded = await tx.product.updateMany({
-      where: { id: productId, currentStock: { gte: quantity } },
-      data: { currentStock: { decrement: quantity } },
-    });
-
-    // Zero rows updated means the guard rejected it: stock moved underneath us,
-    // or there was never enough to begin with.
-    if (guarded.count === 0) {
-      const detail: InsufficientStockDetail = {
-        productId: product.id,
-        productName: product.name,
-        sku: product.sku,
-        requested: quantity,
-        available: product.currentStock,
-        shortBy: quantity - product.currentStock,
-      };
-
-      throw AppError.badRequest(
-        `Insufficient stock for ${product.name} (${product.sku}): requested ${quantity}, only ${product.currentStock} available`,
-        { insufficientStock: [detail] },
-      );
-    }
-  } else {
-    await tx.product.update({
+  // No row came back: work out which precondition failed. This costs an extra
+  // query, but only on the failure path.
+  if (!updated) {
+    const product = await tx.product.findUnique({
       where: { id: productId },
-      data: { currentStock: { increment: quantity } },
+      select: { id: true, name: true, sku: true, currentStock: true, isActive: true },
     });
-  }
 
-  // Read back inside the same transaction so balanceAfter is the level this
-  // movement actually produced.
-  const updated = await tx.product.findUniqueOrThrow({
-    where: { id: productId },
-    select: { id: true, name: true, sku: true, currentStock: true, minStockAlert: true },
-  });
+    if (!product) throw AppError.notFound('Product not found');
+    if (!product.isActive) {
+      throw AppError.conflict(`${product.name} (${product.sku}) is deactivated and cannot move stock`);
+    }
+
+    const detail: InsufficientStockDetail = {
+      productId: product.id,
+      productName: product.name,
+      sku: product.sku,
+      requested: quantity,
+      available: product.currentStock,
+      shortBy: quantity - product.currentStock,
+    };
+
+    throw AppError.badRequest(
+      `Insufficient stock for ${product.name} (${product.sku}): requested ${quantity}, only ${product.currentStock} available`,
+      { insufficientStock: [detail] },
+    );
+  }
 
   const movement = await tx.stockMovement.create({
     data: {
@@ -124,9 +140,20 @@ export async function applyStockMovement(tx: Prisma.TransactionClient, request: 
   return { product: updated, movement };
 }
 
+/**
+ * Options for every interactive transaction that moves stock.
+ *
+ * The database is a managed instance in another region, so each statement costs
+ * real latency, and concurrent writers to the same product queue behind its row
+ * lock. Prisma's 5-second default is comfortable for a single request and too
+ * tight for a burst of them; these values leave room for a queue without
+ * letting a genuinely stuck transaction hold on indefinitely.
+ */
+export const STOCK_TX_OPTIONS = { timeout: 20_000, maxWait: 20_000 } as const;
+
 /** Convenience wrapper for callers that are not already inside a transaction. */
 export async function recordStockMovement(request: StockMovementRequest) {
-  return prisma.$transaction((tx) => applyStockMovement(tx, request));
+  return prisma.$transaction((tx) => applyStockMovement(tx, request), STOCK_TX_OPTIONS);
 }
 
 const movementSelect = {

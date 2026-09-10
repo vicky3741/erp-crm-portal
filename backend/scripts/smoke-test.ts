@@ -10,6 +10,17 @@
  */
 const BASE = (process.env.API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
 
+/**
+ * Every record this suite creates is tagged with a per-run id.
+ *
+ * Mobile numbers and SKUs are unique in the database, and the suite only ever
+ * soft-deletes what it creates, so fixed test values would collide with the
+ * previous run. Tagging makes the suite runnable repeatedly against the same
+ * database without a reseed — which matters, because it gets run live.
+ */
+const RUN = Date.now().toString().slice(-6);
+const RUN_MOBILE = `9${Date.now().toString().slice(-9)}`;
+
 interface Result {
   group: string;
   name: string;
@@ -315,11 +326,12 @@ async function main() {
 
   // ---------------------------- customers: write ---------------------------
   group('customers: write');
+  const customerName = `Smoke Test Customer ${RUN}`;
   const newCustomer = {
-    name: 'Smoke Test Customer',
-    mobile: '9812345678',
-    email: 'Smoke.Test@Example.COM',
-    businessName: 'Smoke Test Traders',
+    name: customerName,
+    mobile: RUN_MOBILE,
+    email: `Smoke.Test.${RUN}@Example.COM`,
+    businessName: `Smoke Test Traders ${RUN}`,
     gstNumber: '27AABCP1234C1ZV',
     customerType: 'WHOLESALE',
     address: 'Plot 1, Test Industrial Area, Pune 411001',
@@ -364,22 +376,22 @@ async function main() {
   const customerId: string | undefined = createdRes.body?.data?.id;
   check(
     'email is normalised to lower case on create',
-    'smoke.test@example.com',
+    `smoke.test.${RUN}@example.com`,
     String(createdRes.body?.data?.email),
-    createdRes.body?.data?.email === 'smoke.test@example.com',
+    createdRes.body?.data?.email === `smoke.test.${RUN}@example.com`,
   );
 
   const duplicate = await call('/api/customers', {
     method: 'POST',
     token: tokens.SALES,
-    body: { ...newCustomer, email: 'different@example.com' },
+    body: { ...newCustomer, email: `different.${RUN}@example.com` },
   });
   expectStatus('a duplicate mobile number is rejected', duplicate.status, 409);
   check(
     'the duplicate error names the existing customer',
-    'message mentions Smoke Test Customer',
+    `message mentions ${customerName}`,
     String(duplicate.body?.message),
-    String(duplicate.body?.message ?? '').includes('Smoke Test Customer'),
+    String(duplicate.body?.message ?? '').includes(customerName),
   );
 
   const updated = await call(`/api/customers/${customerId}`, {
@@ -392,7 +404,7 @@ async function main() {
     'the update applied and left other fields alone',
     'status ACTIVE, name unchanged',
     `${updated.body?.data?.status}, ${updated.body?.data?.name}`,
-    updated.body?.data?.status === 'ACTIVE' && updated.body?.data?.name === 'Smoke Test Customer',
+    updated.body?.data?.status === 'ACTIVE' && updated.body?.data?.name === customerName,
   );
 
   const emptyPatch = await call(`/api/customers/${customerId}`, {
@@ -454,7 +466,9 @@ async function main() {
   const deleted = await call(`/api/customers/${customerId}`, { method: 'DELETE', token: tokens.ADMIN });
   expectStatus('ADMIN can deactivate a customer', deleted.status, 200);
 
-  const afterDelete = await call('/api/customers?search=Smoke Test Customer', { token: tokens.ADMIN });
+  const afterDelete = await call(`/api/customers?search=${encodeURIComponent(customerName)}`, {
+    token: tokens.ADMIN,
+  });
   check(
     'a deactivated customer is hidden from the default list',
     '0 results',
@@ -462,9 +476,10 @@ async function main() {
     afterDelete.body?.data?.length === 0,
   );
 
-  const withInactive = await call('/api/customers?search=Smoke Test Customer&includeInactive=true', {
-    token: tokens.ADMIN,
-  });
+  const withInactive = await call(
+    `/api/customers?search=${encodeURIComponent(customerName)}&includeInactive=true`,
+    { token: tokens.ADMIN },
+  );
   check(
     'the record still exists and can be listed explicitly',
     '1 result, isActive false',
@@ -486,11 +501,22 @@ async function main() {
   group('products: read');
   const productList = await call('/api/products?limit=100', { token: tokens.SALES });
   expectStatus('list products', productList.status, 200);
+
+  // Asserted against the seeded catalogue rather than an absolute row count,
+  // so a previous run's leftover records cannot break the suite.
+  const SEEDED_SKUS = [
+    'GRO-OIL-1L', 'GRO-RIC-25', 'GRO-ATA-10', 'GRO-DAL-05',
+    'HOM-DET-04', 'HOM-DSH-750', 'HOM-FLR-05',
+    'PER-SHM-500', 'PER-SOP-125', 'PER-TPT-200',
+    'SNK-BIS-1K', 'SNK-NDL-48',
+  ];
+  const listedSkus = new Set((productList.body?.data ?? []).map((p: any) => p.sku));
+  const missingSkus = SEEDED_SKUS.filter((s) => !listedSkus.has(s));
   check(
-    'seeded products are returned',
-    '12 active products',
-    `${productList.body?.meta?.total}`,
-    productList.body?.meta?.total === 12,
+    'every seeded product is returned',
+    'all 12 seeded SKUs present',
+    missingSkus.length ? `missing ${missingSkus.join(', ')}` : 'all present',
+    missingSkus.length === 0,
   );
   check(
     'each row carries a computed isLowStock flag',
@@ -500,29 +526,34 @@ async function main() {
   );
 
   const lowStockRes = await call('/api/products/low-stock', { token: tokens.WAREHOUSE });
+  const lowStockSkus = new Set((lowStockRes.body?.data ?? []).map((p: any) => p.sku));
+  const SEEDED_LOW_STOCK = ['GRO-DAL-05', 'HOM-DSH-750', 'PER-TPT-200'];
   check(
-    'low-stock endpoint returns the three seeded products',
-    '3 products, all at or below their alert level',
-    `${lowStockRes.body?.data?.length}`,
-    lowStockRes.body?.data?.length === 3 &&
-      lowStockRes.body.data.every((p: any) => p.currentStock <= p.minStockAlert),
+    'low-stock returns the seeded low-stock products, and only genuinely low ones',
+    'the 3 seeded low-stock SKUs present, every row at or below its alert level',
+    `${lowStockRes.body?.data?.length} rows`,
+    SEEDED_LOW_STOCK.every((s) => lowStockSkus.has(s)) &&
+      (lowStockRes.body?.data ?? []).every((p: any) => p.currentStock <= p.minStockAlert),
   );
 
-  const lowStockFilter = await call('/api/products?lowStock=true', { token: tokens.ADMIN });
+  const lowStockFilter = await call('/api/products?lowStock=true&limit=100', { token: tokens.ADMIN });
   check(
     'the lowStock filter agrees with the dedicated endpoint',
-    '3',
+    `${lowStockRes.body?.data?.length}`,
     `${lowStockFilter.body?.meta?.total}`,
-    lowStockFilter.body?.meta?.total === 3,
+    lowStockFilter.body?.meta?.total === lowStockRes.body?.data?.length,
   );
 
   const categoriesRes = await call('/api/products/categories', { token: tokens.SALES });
+  const categories: string[] = categoriesRes.body?.data ?? [];
+  const SEEDED_CATEGORIES = ['Grocery', 'Home Care', 'Personal Care', 'Snacks'];
   check(
-    'categories are returned distinct and sorted',
-    'Grocery, Home Care, Personal Care, Snacks',
-    JSON.stringify(categoriesRes.body?.data),
-    JSON.stringify(categoriesRes.body?.data) ===
-      JSON.stringify(['Grocery', 'Home Care', 'Personal Care', 'Snacks']),
+    'categories are distinct and alphabetically sorted',
+    'contains the 4 seeded categories, no duplicates, sorted',
+    JSON.stringify(categories),
+    SEEDED_CATEGORIES.every((c) => categories.includes(c)) &&
+      new Set(categories).size === categories.length &&
+      categories.every((c, i) => i === 0 || (categories[i - 1] as string).localeCompare(c) <= 0),
   );
 
   const bySku = await call('/api/products?search=GRO-OIL', { token: tokens.ADMIN });
@@ -539,8 +570,8 @@ async function main() {
   // --------------------------- products: write -----------------------------
   group('products: write');
   const newProduct = {
-    name: 'Smoke Test Widget',
-    sku: 'smoke-test-001',
+    name: `Smoke Test Widget ${RUN}`,
+    sku: `smoke-test-${RUN}`,
     category: 'Test Category',
     unitPrice: 199.5,
     openingStock: 100,
@@ -574,9 +605,9 @@ async function main() {
   const productId: string = productRes.body?.data?.id;
   check(
     'SKU is upper-cased on create',
-    'SMOKE-TEST-001',
+    `SMOKE-TEST-${RUN}`,
     String(productRes.body?.data?.sku),
-    productRes.body?.data?.sku === 'SMOKE-TEST-001',
+    productRes.body?.data?.sku === `SMOKE-TEST-${RUN}`,
   );
   check(
     'opening stock was applied',
@@ -714,10 +745,13 @@ async function main() {
 
   const succeeded = concurrent.filter((r) => r.status === 201).length;
   const rejected = concurrent.filter((r) => r.status === 400).length;
+  const other = concurrent.filter((r) => r.status !== 201 && r.status !== 400);
   check(
     'ten concurrent withdrawals of 20 from a balance of 120',
-    'exactly 6 succeed, 4 rejected',
-    `${succeeded} succeeded, ${rejected} rejected`,
+    'exactly 6 succeed, 4 rejected, no other outcome',
+    other.length
+      ? `${succeeded} succeeded, ${rejected} rejected, ${other.length} errored (${other.map((r) => r.status).join(',')})`
+      : `${succeeded} succeeded, ${rejected} rejected`,
     succeeded === 6 && rejected === 4,
   );
 
@@ -789,6 +823,367 @@ async function main() {
     `${oilAfter.body?.data?.currentStock}`,
     oilAfter.body?.data?.currentStock === 360,
   );
+
+  // ------------------------------- challans --------------------------------
+  group('challans: drafts');
+
+  // A dedicated product with a known balance, so the arithmetic is unambiguous.
+  const challanProductRes = await call('/api/products', {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: {
+      name: `Challan Test Item ${RUN}`,
+      sku: `CHALLAN-TEST-A-${RUN}`,
+      category: 'Test Category',
+      unitPrice: 250,
+      openingStock: 300,
+      minStockAlert: 10,
+      location: 'Warehouse Z - Rack 1',
+    },
+  });
+  const chProductId: string = challanProductRes.body?.data?.id;
+
+  const customerForChallan = (await call('/api/customers?search=9765443321', { token: tokens.ADMIN }))
+    .body?.data?.[0];
+  const chCustomerId: string = customerForChallan?.id;
+
+  const draftByWarehouse = await call('/api/challans', {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: { customerId: chCustomerId, items: [{ productId: chProductId, quantity: 10 }] },
+  });
+  expectStatus('WAREHOUSE cannot raise a challan', draftByWarehouse.status, 403);
+
+  const emptyItems = await call('/api/challans', {
+    method: 'POST',
+    token: tokens.SALES,
+    body: { customerId: chCustomerId, items: [] },
+  });
+  expectStatus('a challan with no line items is rejected', emptyItems.status, 400);
+
+  const unknownProduct = await call('/api/challans', {
+    method: 'POST',
+    token: tokens.SALES,
+    body: { customerId: chCustomerId, items: [{ productId: 'nope', quantity: 1 }] },
+  });
+  expectStatus('a challan naming an unknown product is rejected', unknownProduct.status, 400);
+
+  const draftRes = await call('/api/challans', {
+    method: 'POST',
+    token: tokens.SALES,
+    body: {
+      customerId: chCustomerId,
+      items: [
+        { productId: chProductId, quantity: 40 },
+        { productId: chProductId, quantity: 20 },
+      ],
+      notes: 'Raised by the smoke test.',
+    },
+  });
+  expectStatus('SALES can raise a draft challan', draftRes.status, 201);
+  const draftId: string = draftRes.body?.data?.id;
+
+  check(
+    'the challan number follows the CH-YYYYMM-NNNN format',
+    'CH-YYYYMM-NNNN',
+    String(draftRes.body?.data?.challanNumber),
+    /^CH-\d{6}-\d{4}$/.test(String(draftRes.body?.data?.challanNumber ?? '')),
+  );
+  check(
+    'duplicate lines for one product are merged, not duplicated',
+    '1 line of quantity 60',
+    `${draftRes.body?.data?.items?.length} line(s) of quantity ${draftRes.body?.data?.items?.[0]?.quantity}`,
+    draftRes.body?.data?.items?.length === 1 && draftRes.body.data.items[0].quantity === 60,
+  );
+  check(
+    'totals are computed from the line items',
+    'quantity 60, amount 15000.00',
+    `quantity ${draftRes.body?.data?.totalQuantity}, amount ${draftRes.body?.data?.totalAmount}`,
+    draftRes.body?.data?.totalQuantity === 60 && Number(draftRes.body?.data?.totalAmount) === 15000,
+  );
+  check(
+    'the line stores a snapshot of the product, not just its id',
+    'name, SKU, category and price all present',
+    JSON.stringify({
+      name: draftRes.body?.data?.items?.[0]?.productName,
+      sku: draftRes.body?.data?.items?.[0]?.productSku,
+      price: draftRes.body?.data?.items?.[0]?.unitPrice,
+    }),
+    draftRes.body?.data?.items?.[0]?.productName === `Challan Test Item ${RUN}` &&
+      draftRes.body?.data?.items?.[0]?.productSku === `CHALLAN-TEST-A-${RUN}` &&
+      Number(draftRes.body?.data?.items?.[0]?.unitPrice) === 250,
+  );
+  check(
+    'the challan stores a snapshot of the customer too',
+    'Arif Shaikh / Shaikh Distributors',
+    `${draftRes.body?.data?.customerName} / ${draftRes.body?.data?.customerBusinessName}`,
+    draftRes.body?.data?.customerName === 'Arif Shaikh' &&
+      draftRes.body?.data?.customerBusinessName === 'Shaikh Distributors',
+  );
+
+  const afterDraft = await call(`/api/products/${chProductId}`, { token: tokens.ADMIN });
+  check(
+    'raising a draft does NOT touch stock',
+    '300 still in stock',
+    `${afterDraft.body?.data?.currentStock}`,
+    afterDraft.body?.data?.currentStock === 300,
+  );
+
+  const draftMovements = await call(`/api/stock-movements?referenceType=CHALLAN&limit=100`, {
+    token: tokens.ADMIN,
+  });
+  check(
+    'a draft produces no stock movements',
+    'no movements reference this draft',
+    `${(draftMovements.body?.data ?? []).filter((m: any) => m.referenceId === draftId).length}`,
+    (draftMovements.body?.data ?? []).filter((m: any) => m.referenceId === draftId).length === 0,
+  );
+
+  // ------------------------------ confirmation -----------------------------
+  group('challans: confirmation');
+
+  const confirmed = await call(`/api/challans/${draftId}/confirm`, {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+  });
+  expectStatus('WAREHOUSE can confirm a challan (they dispatch the goods)', confirmed.status, 200);
+  check(
+    'confirmation records who and when',
+    'status CONFIRMED, confirmedBy Imran Qureshi',
+    `${confirmed.body?.data?.status}, ${confirmed.body?.data?.confirmedBy?.name}`,
+    confirmed.body?.data?.status === 'CONFIRMED' &&
+      confirmed.body?.data?.confirmedBy?.name === 'Imran Qureshi' &&
+      Boolean(confirmed.body?.data?.confirmedAt),
+  );
+
+  const afterConfirm = await call(`/api/products/${chProductId}`, { token: tokens.ADMIN });
+  check(
+    'confirming deducted exactly the dispatched quantity',
+    '300 - 60 = 240',
+    `${afterConfirm.body?.data?.currentStock}`,
+    afterConfirm.body?.data?.currentStock === 240,
+  );
+
+  const confirmDetail = await call(`/api/challans/${draftId}`, { token: tokens.ACCOUNTS });
+  check(
+    'the challan links to the stock movements it caused',
+    '1 OUT movement, balanceAfter 240',
+    `${confirmDetail.body?.data?.stockMovements?.length} movement, type ${confirmDetail.body?.data?.stockMovements?.[0]?.movementType}, balanceAfter ${confirmDetail.body?.data?.stockMovements?.[0]?.balanceAfter}`,
+    confirmDetail.body?.data?.stockMovements?.length === 1 &&
+      confirmDetail.body.data.stockMovements[0].movementType === 'OUT' &&
+      confirmDetail.body.data.stockMovements[0].balanceAfter === 240,
+  );
+
+  const doubleConfirm = await call(`/api/challans/${draftId}/confirm`, {
+    method: 'POST',
+    token: tokens.ADMIN,
+  });
+  expectStatus('confirming twice is rejected', doubleConfirm.status, 409);
+
+  const afterDoubleConfirm = await call(`/api/products/${chProductId}`, { token: tokens.ADMIN });
+  check(
+    'the rejected second confirm did not deduct stock again',
+    'still 240',
+    `${afterDoubleConfirm.body?.data?.currentStock}`,
+    afterDoubleConfirm.body?.data?.currentStock === 240,
+  );
+
+  const editConfirmed = await call(`/api/challans/${draftId}`, {
+    method: 'PATCH',
+    token: tokens.SALES,
+    body: { notes: 'Trying to edit a confirmed challan' },
+  });
+  expectStatus('a confirmed challan cannot be edited', editConfirmed.status, 409);
+
+  // ------------------- insufficient stock is atomic ------------------------
+  group('challans: insufficient stock');
+
+  const shortProductRes = await call('/api/products', {
+    method: 'POST',
+    token: tokens.WAREHOUSE,
+    body: {
+      name: `Scarce Item ${RUN}`,
+      sku: `CHALLAN-TEST-B-${RUN}`,
+      category: 'Test Category',
+      unitPrice: 100,
+      openingStock: 5,
+      minStockAlert: 1,
+      location: 'Warehouse Z - Rack 2',
+    },
+  });
+  const scarceId: string = shortProductRes.body?.data?.id;
+
+  const mixedDraft = await call('/api/challans', {
+    method: 'POST',
+    token: tokens.SALES,
+    body: {
+      customerId: chCustomerId,
+      items: [
+        { productId: chProductId, quantity: 10 }, // plenty available
+        { productId: scarceId, quantity: 50 }, // only 5 available
+      ],
+    },
+  });
+  const mixedId: string = mixedDraft.body?.data?.id;
+
+  const failedConfirm = await call(`/api/challans/${mixedId}/confirm`, {
+    method: 'POST',
+    token: tokens.SALES,
+  });
+  expectStatus('confirming with insufficient stock is rejected', failedConfirm.status, 400);
+  check(
+    'the error names the short item and the shortfall',
+    'Scarce Item, need 50, have 5',
+    String(failedConfirm.body?.message),
+    String(failedConfirm.body?.message ?? '').includes('Scarce Item') &&
+      failedConfirm.body?.details?.insufficientStock?.[0]?.shortBy === 45,
+  );
+
+  const availableAfterFail = await call(`/api/products/${chProductId}`, { token: tokens.ADMIN });
+  check(
+    'the AVAILABLE item on that challan was not deducted either',
+    'still 240 — the whole confirm rolled back',
+    `${availableAfterFail.body?.data?.currentStock}`,
+    availableAfterFail.body?.data?.currentStock === 240,
+  );
+
+  const stillDraft = await call(`/api/challans/${mixedId}`, { token: tokens.ADMIN });
+  check(
+    'the challan stayed a DRAFT after the failed confirm',
+    'DRAFT',
+    String(stillDraft.body?.data?.status),
+    stillDraft.body?.data?.status === 'DRAFT',
+  );
+
+  // ---------------------- concurrent confirmation --------------------------
+  group('challans: concurrent confirmation');
+
+  // Scarce Item has 5 units. Five challans each want 2 — only two can ship.
+  const raceIds: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const res = await call('/api/challans', {
+      method: 'POST',
+      token: tokens.SALES,
+      body: { customerId: chCustomerId, items: [{ productId: scarceId, quantity: 2 }] },
+    });
+    raceIds.push(res.body?.data?.id);
+  }
+
+  const raceResults = await Promise.all(
+    raceIds.map((id) => call(`/api/challans/${id}/confirm`, { method: 'POST', token: tokens.SALES })),
+  );
+
+  const raceOk = raceResults.filter((r) => r.status === 200).length;
+  const raceFail = raceResults.filter((r) => r.status === 400).length;
+  check(
+    'five simultaneous confirms for 2 units each, only 5 in stock',
+    'exactly 2 confirm, 3 rejected',
+    `${raceOk} confirmed, ${raceFail} rejected`,
+    raceOk === 2 && raceFail === 3,
+  );
+
+  const scarceAfterRace = await call(`/api/products/${scarceId}`, { token: tokens.ADMIN });
+  check(
+    'the scarce product landed on 1, never below zero',
+    '1',
+    `${scarceAfterRace.body?.data?.currentStock}`,
+    scarceAfterRace.body?.data?.currentStock === 1,
+  );
+
+  const uniqueNumbers = new Set(
+    (await call('/api/challans?limit=100', { token: tokens.ADMIN })).body?.data?.map(
+      (c: any) => c.challanNumber,
+    ),
+  );
+  const allChallans = (await call('/api/challans?limit=100', { token: tokens.ADMIN })).body?.data ?? [];
+  check(
+    'every challan number issued is unique',
+    `${allChallans.length} challans, ${allChallans.length} distinct numbers`,
+    `${uniqueNumbers.size} distinct`,
+    uniqueNumbers.size === allChallans.length,
+  );
+
+  // ------------------------------ cancellation -----------------------------
+  group('challans: cancellation');
+
+  const cancelBySales = await call(`/api/challans/${draftId}/cancel`, {
+    method: 'POST',
+    token: tokens.SALES,
+    body: { reason: 'Should not be allowed' },
+  });
+  expectStatus('SALES cannot cancel a challan', cancelBySales.status, 403);
+
+  const cancelNoReason = await call(`/api/challans/${draftId}/cancel`, {
+    method: 'POST',
+    token: tokens.ADMIN,
+    body: {},
+  });
+  expectStatus('cancelling without a reason is rejected', cancelNoReason.status, 400);
+
+  const cancelled = await call(`/api/challans/${draftId}/cancel`, {
+    method: 'POST',
+    token: tokens.ADMIN,
+    body: { reason: 'Customer cancelled the order' },
+  });
+  expectStatus('ADMIN can cancel a confirmed challan', cancelled.status, 200);
+
+  const afterCancel = await call(`/api/products/${chProductId}`, { token: tokens.ADMIN });
+  check(
+    'cancelling returned the stock',
+    '240 + 60 = 300',
+    `${afterCancel.body?.data?.currentStock}`,
+    afterCancel.body?.data?.currentStock === 300,
+  );
+
+  const cancelDetail = await call(`/api/challans/${draftId}`, { token: tokens.ADMIN });
+  check(
+    'the return is recorded as an IN movement, not by deleting the OUT',
+    'OUT then IN, both referencing the challan',
+    (cancelDetail.body?.data?.stockMovements ?? []).map((m: any) => m.movementType).join(' then '),
+    (cancelDetail.body?.data?.stockMovements ?? []).length === 2 &&
+      cancelDetail.body.data.stockMovements[0].movementType === 'OUT' &&
+      cancelDetail.body.data.stockMovements[1].movementType === 'IN',
+  );
+  check(
+    'the cancellation records who, when and why',
+    'reason and canceller stored',
+    `${cancelDetail.body?.data?.cancelReason} — ${cancelDetail.body?.data?.cancelledBy?.name}`,
+    cancelDetail.body?.data?.cancelReason === 'Customer cancelled the order' &&
+      cancelDetail.body?.data?.cancelledBy?.role === 'ADMIN',
+  );
+
+  const reconfirmCancelled = await call(`/api/challans/${draftId}/confirm`, {
+    method: 'POST',
+    token: tokens.ADMIN,
+  });
+  expectStatus('a cancelled challan cannot be confirmed', reconfirmCancelled.status, 409);
+
+  // --------------------------- snapshot integrity --------------------------
+  group('challans: snapshot integrity');
+
+  await call(`/api/products/${chProductId}`, {
+    method: 'PATCH',
+    token: tokens.WAREHOUSE,
+    body: { name: 'RENAMED After Dispatch', unitPrice: 999 },
+  });
+
+  const afterRename = await call(`/api/challans/${draftId}`, { token: tokens.ADMIN });
+  check(
+    'renaming and repricing a product does NOT rewrite past challans',
+    'still "Challan Test Item" at 250',
+    `${afterRename.body?.data?.items?.[0]?.productName} at ${afterRename.body?.data?.items?.[0]?.unitPrice}`,
+    afterRename.body?.data?.items?.[0]?.productName === `Challan Test Item ${RUN}` &&
+      Number(afterRename.body?.data?.items?.[0]?.unitPrice) === 250,
+  );
+
+  const challanSummary = await call('/api/challans/summary', { token: tokens.ACCOUNTS });
+  expectStatus('challan summary responds', challanSummary.status, 200);
+
+  // Deactivate the products this run created, so repeated runs do not fill the
+  // active catalogue. Their ledger rows and challans deliberately survive.
+  for (const id of [chProductId, scarceId]) {
+    await call(`/api/products/${id}`, { method: 'DELETE', token: tokens.ADMIN });
+  }
 
   // -------------------------------- report ---------------------------------
   const passed = results.filter((r) => r.pass).length;

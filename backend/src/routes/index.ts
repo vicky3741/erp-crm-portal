@@ -3,6 +3,7 @@ import authRoutes from '../modules/auth/auth.routes';
 import customerRoutes from '../modules/customers/customer.routes';
 import productRoutes from '../modules/products/product.routes';
 import stockRoutes from '../modules/stock/stock.routes';
+import challanRoutes from '../modules/challans/challan.routes';
 
 /**
  * Central API router. Feature routers are mounted here as each module is built:
@@ -54,6 +55,15 @@ router.get('/', (_req, res) => {
           'GET /api/stock-movements': 'The stock ledger, filterable by product, type and date',
           'GET /api/stock-movements/summary': 'Movement counts',
         },
+        challans: {
+          'GET /api/challans': 'Paginated list with search, status, customer and date filters',
+          'GET /api/challans/summary': 'Counts and confirmed value for the dashboard',
+          'POST /api/challans': 'Raise a challan, optionally confirming it (ADMIN, SALES)',
+          'GET /api/challans/:id': 'Challan detail with items and the stock movements it caused',
+          'PATCH /api/challans/:id': 'Edit a DRAFT challan (ADMIN, SALES)',
+          'POST /api/challans/:id/confirm': 'Confirm and deduct stock (ADMIN, SALES, WAREHOUSE)',
+          'POST /api/challans/:id/cancel': 'Cancel and return stock (ADMIN)',
+        },
       },
     },
   });
@@ -63,5 +73,6 @@ router.use('/auth', authRoutes);
 router.use('/customers', customerRoutes);
 router.use('/products', productRoutes);
 router.use('/stock-movements', stockRoutes);
+router.use('/challans', challanRoutes);
 
 export default router;
