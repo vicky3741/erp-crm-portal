@@ -32,7 +32,7 @@ export function createApp() {
   app.use(morgan(env.isProd ? 'combined' : 'dev'));
   app.use('/api', globalRateLimiter);
 
-  // Health probe — used by Render, by the frontend, and in the demo recording.
+  // Health probe — used by Render's health check and by the frontend.
   // Reports the database separately so a reachable API with an unreachable
   // database is not mistaken for a healthy system.
   app.get(

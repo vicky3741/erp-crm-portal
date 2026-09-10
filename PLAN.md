@@ -178,11 +178,10 @@ erp-crm-portal/
 - `docs/ASSUMPTIONS.md`: assumptions + **known limitations / not-built list**
 **Done when:** stranger can clone and run from README alone.
 
-### S14 — Recording + Submission  ⏱ 45m
-- record demo (script in section below)
-- upload to Google Drive → share "Anyone with link"
-- fill Google Form
-**Done when:** form submitted.
+### S14 — Deploy verification  ⏱ 45m
+- run the smoke suite against the deployed API
+- confirm all four role logins work on the live frontend
+**Done when:** every check passes against production.
 
 ---
 
@@ -196,35 +195,4 @@ If time runs short, cut in this order (and write it in ASSUMPTIONS.md):
 3. Soft-delete endpoints
 4. Bonus (Docker, PDF export, S3) — skip entirely, all optional
 
-Never cut: S2 auth, S5 challan stock logic, S12 deploy, S13 docs, S14 recording.
-
----
-
-## Screen Recording Script (~10–12 min)
-
-1. (0:00) Face/voice intro — name, role applied, project name
-2. (0:30) Repo walkthrough — folder structure, prisma schema, one module's controller/service
-3. (2:00) Explain challan confirm transaction in code — why snapshot, why txn, why stock can't go negative
-4. (4:00) Postman: login as admin → show token → hit protected route
-5. (5:00) Live app: login as **Sales** → create customer → add follow-up
-6. (6:30) Login as **Warehouse** → show sidebar differences → adjust stock → show movement log
-7. (8:00) Create challan → confirm → **switch to product page, show stock dropped**
-8. (9:30) Force insufficient-stock error → show clean API error message
-9. (10:30) Show live deployed URLs (frontend + backend health)
-10. (11:00) Limitations + what you'd add with more time
-
-Tool: **Windows Game Bar `Win+G`** (free, built-in) or OBS. Mic ON. Screen 1080p.
-
----
-
-## Google Form Answers Checklist
-
-| Field | Value |
-|---|---|
-| Passing year | _your year_ |
-| Resume link | Drive link, sharing = Anyone with link |
-| GitHub repository | `https://github.com/<you>/erp-crm-portal` (public) |
-| Documentation link | README URL, or Drive PDF of docs |
-| Recording link | Drive/YouTube-unlisted, sharing = Anyone with link |
-
-⚠️ Test every link in an incognito window before submitting.
+Never cut: S2 auth, S5 challan stock logic, S12 deploy, S13 docs.

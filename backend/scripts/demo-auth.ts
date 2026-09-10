@@ -1,12 +1,11 @@
 /**
- * Narrated auth walkthrough for the screen recording.
+ * Narrated walkthrough of authentication and role-based access.
  *
  * Run with:  npm run demo:auth        (with the API running)
  *
- * Unlike the smoke test, which asserts and reports pass/fail, this script is
- * written to be READ ALOUD. It performs five requests in the order a reviewer
- * would want to see them, printing the request and the response for each so the
- * behaviour is visible on screen rather than described.
+ * Unlike the smoke test, which asserts and reports pass/fail, this prints the
+ * request and the response for each step in the order someone reviewing the
+ * API would want to see them, so the behaviour is visible rather than described.
  */
 const BASE = (process.env.API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
 
